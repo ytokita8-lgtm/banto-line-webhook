@@ -48,8 +48,10 @@ def get_events(days=3):
             try:
                 comp = ev.icalendar_component
                 dtstart = comp.get("dtstart").dt
-                title = str(comp.get("summary", "（無題）"))
-                place = str(comp.get("location", "") or "")
+                title = " ".join(str(comp.get("summary", "（無題）")).split())
+                place_raw = str(comp.get("location", "") or "").strip()
+                # 住所は改行で複数行になるので、1行目（施設名）だけ使う
+                place = place_raw.splitlines()[0].strip() if place_raw else ""
             except Exception:
                 continue
             all_day = not isinstance(dtstart, dt.datetime)
