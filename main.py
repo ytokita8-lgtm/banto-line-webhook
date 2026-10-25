@@ -384,3 +384,46 @@ def calendar_briefing(days: int = Query(3, ge=1, le=7), key: str = Query(...)):
     except Exception as e:
         logger.warning(f"iCloudカレンダー取得失敗: {e}")
         raise HTTPException(status_code=500, detail=f"calendar error: {type(e).__name__}")
+
+
+# ── iCloudカレンダー：予定の追加（専用キー CALENDAR_WRITE_KEY 必須）──────────────
+CALENDAR_WRITE_KEY = os.getenv("CALENDAR_WRITE_KEY", "")
+
+def _check_write_key(key: str):
+    # 専用キー未設定のときは書き込みを一切受け付けない
+    if not CALENDAR_WRITE_KEY or not hmac.compare_digest(key or "", CALENDAR_WRITE_KEY):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+@app.get("/api/calendar/calendars")
+def calendar_names(key: str = Query(...)):
+    _check_write_key(key)
+    try:
+        from icloud_calendar import list_calendar_names
+        return {"calendars": list_calendar_names()}
+    except Exception as e:
+        logger.warning(f"カレンダー一覧取得失敗: {e}")
+        raise HTTPException(status_code=500, detail=f"calendar error: {type(e).__name__}")
+
+@app.api_route("/api/calendar/add", methods=["GET", "POST"])
+def calendar_add(
+    title: str = Query(..., max_length=200),
+    start: str = Query(..., description="日本時間 例 2026-10-26T19:00"),
+    minutes: int = Query(60, ge=5, le=1440),
+    location: str = Query("", max_length=200),
+    calendar: Optional[str] = Query(None),
+    key: str = Query(...),
+):
+    _check_write_key(key)
+    try:
+        from datetime import datetime as _dt
+        from icloud_calendar import add_event
+        s = _dt.fromisoformat(start)
+        msg = add_event(title, s, minutes, location, calendar)
+        logger.info(f"予定追加: {msg}")
+        return {"ok": True, "added": msg}
+    except ValueError:
+        raise HTTPException(status_code=400, detail="start の形式が違います（例 2026-10-26T19:00）")
+    except Exception as e:
+        logger.warning(f"予定追加失敗: {e}")
+        raise HTTPException(status_code=500, detail=f"calendar error: {type(e).__name__}")
+
