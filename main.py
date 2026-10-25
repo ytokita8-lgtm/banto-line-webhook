@@ -372,3 +372,15 @@ def stats(key: str = Query(...)):
 @app.get("/api/health")
 def health():
     return {"status": "ok", "version": "2.0.0"}
+
+# ── iCloudカレンダー（朝ブリーフィング用）──────────────
+@app.get("/api/calendar/briefing")
+def calendar_briefing(days: int = Query(3, ge=1, le=7), key: str = Query(...)):
+    if key != API_KEY:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    try:
+        from icloud_calendar import format_briefing
+        return {"text": format_briefing(days)}
+    except Exception as e:
+        logger.warning(f"iCloudカレンダー取得失敗: {e}")
+        raise HTTPException(status_code=500, detail=f"calendar error: {type(e).__name__}")
