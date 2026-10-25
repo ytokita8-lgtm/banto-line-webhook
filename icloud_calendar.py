@@ -89,3 +89,46 @@ def format_briefing(days=3):
 
 if __name__ == "__main__":
     print(format_briefing())
+
+# ── 書き込み（予定の追加）──────────────────────────────
+def _event_calendars():
+    """予定を入れられるカレンダー（リマインダー用は除く）"""
+    result = []
+    for cal in _client().principal().calendars():
+        try:
+            comps = cal.get_supported_components()
+        except Exception:
+            comps = ["VEVENT"]
+        if "VEVENT" in comps:
+            result.append(cal)
+    return result
+
+
+def list_calendar_names():
+    return [str(c.name) for c in _event_calendars()]
+
+
+def add_event(title, start, minutes=60, location="", calendar_name=None):
+    """予定を1件追加する。start は日本時間の datetime。入れた内容を文字で返す"""
+    cals = _event_calendars()
+    if not cals:
+        raise RuntimeError("予定を入れられるカレンダーが見つかりません")
+    name = calendar_name or os.environ.get("ICLOUD_CALENDAR_NAME")
+    target = None
+    if name:
+        for c in cals:
+            if str(c.name) == name:
+                target = c
+                break
+        if target is None:
+            raise RuntimeError(f"カレンダー「{name}」が見つかりません。候補: {[str(c.name) for c in cals]}")
+    else:
+        target = cals[0]
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=JST)
+    end = start + dt.timedelta(minutes=minutes)
+    kwargs = dict(dtstart=start, dtend=end, summary=title)
+    if location:
+        kwargs["location"] = location
+    target.save_event(**kwargs)
+    return f"{start.month}/{start.day}({WEEKDAYS[start.weekday()]}) {start:%H:%M}〜{end:%H:%M} {title} → {target.name}"
